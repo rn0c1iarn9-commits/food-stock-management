@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>賞味期限 & 買い物リスト</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  margin:0;
+  background:#f5f7fb;
+  color:#222;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+
+/* ヘッダー＆タブ */
+.fixed-header{
+  position:sticky;
+  top:0;
+  z-index:1000;
+  background:#f5f7fb;
+  padding-bottom:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.03);
+}
+.nav-buttons{
+  position:relative;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 14px 6px;
+}
+h2{margin:0;font-size:18px;font-weight:700;color:#1e293b}
+.header-actions{display:flex;gap:6px}
+.header-btn{
+  width:40px;
+  height:38px;
+  border:none;
+  border-radius:10px;
+  background:#fff;
+  color:#555;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+  font-size:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.delete-btn{color:#d64545}
+
+/* タブバー */
+.tab-bar{
+  display:flex;
+  margin:0 12px;
+  background:#e2e8f0;
+  border-radius:12px;
+  padding:3px;
+}
+.tab-btn{
+  flex:1;
+  padding:8px 0;
+  border:none;
+  background:transparent;
+  font-size:14px;
+  font-weight:600;
+  color:#64748b;
+  border-radius:9px;
+  box-shadow:none;
+  transition:all .2s ease;
+}
+.tab-btn.active{
+  background:#fff;
+  color:#2563eb;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+/* ボタン基本スタイル */
+button{
+  border:none;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+  cursor:pointer;
+  transition:.15s;
+}
+button:active{transform:scale(.96)}
+
+/* メインコンテンツエリア */
+.tab-content{display:none;padding:12px 12px 30px}
+.tab-content.active{display:block}
+
+/* カード型コンテナ */
+.card{
+  background:#fff;
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+  margin-bottom:12px;
+}
+
+/* フォーム要素 */
+.input-group{margin-bottom:10px}
+.input-label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px}
+input[type="text"], select, textarea{
+  width:100%;
+  padding:10px 12px;
+  border:none;
+  border-radius:10px;
+  background:#f1f5f9;
+  font-size:15px;
+  outline:none;
+  color:#1e293b;
+}
+
+/* 日付入力フィールド用スタイル */
+.date-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding-right: 8px;
+}
+.date-input-wrapper input[type="text"] {
+  flex: 1;
+  background: transparent;
+}
+.date-picker-trigger {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  padding: 4px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hidden-date-picker {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  cursor: pointer;
+}
+
+.btn-primary{
+  width:100%;
+  padding:11px;
+  background:#3b82f6;
+  color:#fff;
+  font-size:15px;
+  font-weight:700;
+  border-radius:10px;
+  box-shadow:0 3px 10px rgba(59,130,246,.25);
+}
+
+.btn-secondary{
+  background:#e2e8f0;
+  color:#334155;
+  padding:8px 12px;
+  font-size:13px;
+  font-weight:600;
+}
+
+/* リストアイテム表示 */
+.list-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+  padding:0 2px;
+}
+.list-title{font-size:15px;font-weight:700;color:#334155}
+.list-count{font-size:12px;color:#94a3b8}
+
+.item-list{display:flex;flex-direction:column;gap:8px}
+
+.item-card{
+  display:flex;
+  align-items:center;
+  padding:10px 12px;
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 2px 6px rgba(0,0,0,.04);
+  border:1px solid #f1f5f9;
+  transition:transform .15s, opacity .15s;
+  position:relative;
+}
+
+.item-checkbox{
+  width:22px;
+  height:22px;
+  border-radius:6px;
+  margin-right:10px;
+  cursor:pointer;
+  accent-color:#3b82f6;
+}
+
+.item-body{flex:1;min-width:0;cursor:pointer}
+.item-title{
+  font-size:15px;
+  font-weight:600;
+  color:#1e293b;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.item-meta{
+  display:flex;
+  gap:8px;
+  font-size:11px;
+  color:#64748b;
+  margin-top:3px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+/* 賞味期限バッジ */
+.badge{
+  padding:3px 7px;
+  border-radius:6px;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.badge-danger{background:#fee2e2;color:#dc2626}
+.badge-warning{background:#fef3c7;color:#d97706}
+.badge-normal{background:#e0f2fe;color:#0284c7}
+.badge-location{background:#f1f5f9;color:#475569}
+
+/* 買い物リスト専用スタイル */
+.shopping-item{
+  user-select:none;
+  touch-action:pan-y;
+}
+.shopping-item.purchased .item-title{
+  text-decoration:line-through;
+  color:#94a3b8;
+}
+.shopping-item.purchased{
+  background:#f8fafc;
+  opacity:0.75;
+}
+.drag-handle{
+  color:#cbd5e1;
+  padding:4px 6px;
+  margin-right:6px;
+  font-size:16px;
+  cursor:grab;
+}
+.shopping-item.dragging{
+  opacity:0.5;
+  background:#eff6ff;
+  border:2px dashed #3b82f6;
+}
+
+/* 音声入力ボタン */
+.mic-btn{
+  background:#f8fafc;
+  color:#475569;
+  border:1px solid #cbd5e1;
+}
+.mic-btn.listening{
+  background:#fee2e2;
+  color:#dc2626;
+  border-color:#fca5a5;
+  animation:micPulse 1s infinite;
+}
+@keyframes micPulse{50%{box-shadow:0 0 0 6px rgba(220,38,38,.15)}}
+
+/* 空表示 */
+.empty-state{
+  text-align:center;
+  padding:30px 10px;
+  color:#94a3b8;
+  font-size:13px;
+}
+
+/* モーダル */
+.modal-backdrop{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(15,23,42,.4);
+  backdrop-filter:blur(2px);
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+.modal-backdrop.show{display:flex}
+.modal-card{
+  width:100%;
+  max-width:420px;
+  background:#fff;
+  border-radius:20px;
+  box-shadow:0 20px 25px -5px rgba(0,0,0,.1);
+  overflow:hidden;
+  max-height:90vh;
+  display:flex;
+  flex-direction:column;
+}
+.modal-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 18px;
+  border-bottom:1px solid #f1f5f9;
+}
+.modal-title{font-size:16px;font-weight:700;color:#0f172a}
+.modal-close{
+  width:30px;
+  height:30px;
+  background:#f1f5f9;
+  box-shadow:none;
+  font-size:18px;
+  color:#64748b;
+  border-radius:8px;
+}
+.modal-body{padding:16px;overflow-y:auto}
+
+/* リアルタイムフィルタ用検索窓 */
+.filter-box {
+  margin-bottom: 12px;
+}
+
+/* トースト通知 */
+.toast{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%) translateY(100px);
+  background:#0f172a;
+  color:#fff;
+  padding:10px 18px;
+  border-radius:20px;
+  font-size:13px;
+  font-weight:500;
+  box-shadow:0 10px 15px -3px rgba(0,0,0,.2);
+  transition:transform .3s ease, opacity .3s ease;
+  opacity:0;
+  z-index:3000;
+  pointer-events:none;
+}
+.toast.show{
+  transform:translateX(-50%) translateY(0);
+  opacity:1;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 固定ヘッダー -->
+<div class="fixed-header">
+  <div class="nav-buttons">
+    <h2>キッチンアシスタント</h2>
+    <div class="header-actions">
+      <button class="header-btn" onclick="openSettings()" title="設定" aria-label="設定">⚙️</button>
+      <button class="header-btn delete-btn" onclick="deleteCheckedItems()" title="選択した項目を削除" aria-label="選択削除">🗑️</button>
+    </div>
+  </div>
+
+  <!-- タブ切替 -->
+  <div class="tab-bar">
+    <button id="tabExpiryBtn" class="tab-btn active" onclick="switchTab('expiry')">🍱 賞味期限管理</button>
+    <button id="tabShoppingBtn" class="tab-btn" onclick="switchTab('shopping')">🛒 買い物リスト</button>
+  </div>
+</div>
+
+<!-- ================= TAB 1: 賞味期限管理 ================= -->
+<div id="tabExpiry" class="tab-content active">
+
+  <!-- 手動追加 / 登録カード -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;color:#334155;" id="expiryFormTitle">＋ 食品を登録</div>
+      <button id="expMicBtn" class="header-btn mic-btn" style="width:auto;padding:0 10px;height:32px;font-size:12px;" onclick="toggleExpiryVoiceInput()">
+        🎤 音声入力
+      </button>
+    </div>
+    
+    <div class="input-group">
+      <label class="input-label">商品名</label>
+      <input type="text" id="expName" placeholder="例：牛乳、豆腐、卵（音声入力可）">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="input-group">
+      <div>
+        <label class="input-label">取得日</label>
+        <div class="date-input-wrapper">
+          <input type="text" id="expAcquireDate" placeholder="YYYY-MM-DD">
+          <div class="date-picker-trigger">
+            📅
+            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expAcquireDate', this.value)">
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="input-label">賞味期限</label>
+        <div class="date-input-wrapper">
+          <input type="text" id="expExpiryDate" placeholder="YYYY-MM-DD">
+          <div class="date-picker-trigger">
+            📅
+            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expExpiryDate', this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label class="input-label">保存場所</label>
+      <select id="expLocation">
+        <option value="冷蔵">冷蔵室</option>
+        <option value="冷凍">冷凍室</option>
+        <option value="野菜">野菜室</option>
+        <option value="常温">常温 / パントリー</option>
+      </select>
+    </div>
+
+    <button id="expSaveBtn" class="btn-primary" onclick="saveExpiryItem()">登録する</button>
+    <button id="expCancelBtn" class="btn-secondary" style="width:100%;margin-top:6px;display:none;" onclick="resetExpiryForm()">キャンセル</button>
+    <div style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center;">
+      💡 音声で「牛乳 2026年11月5日」や「豆腐 11月10日」と喋ると自動入力されます
+    </div>
+  </div>
+
+  <!-- リアルタイムフィルタ機能（検索窓） -->
+  <div class="filter-box">
+    <input type="text" id="expFilterInput" placeholder="🔍 食品を検索... (リアルタイムフィルタ)" oninput="renderExpiryList()">
+  </div>
+
+  <!-- 賞味期限リスト -->
+  <div class="list-header">
+    <div class="list-title">登録した食品（期限の近い順）</div>
+    <div id="expiryCount" class="list-count">0件</div>
+  </div>
+  <div id="expiryList" class="item-list"></div>
+</div>
+
+<!-- ================= TAB 2: 買い物リスト ================= -->
+<div id="tabShopping" class="tab-content">
+  
+  <!-- 音声入力＆追加カード -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:14px;font-weight:700;color:#334155;">買い物項目を追加</div>
+      <button id="shopMicBtn" class="header-btn mic-btn" style="width:auto;padding:0 10px;height:32px;font-size:12px;" onclick="toggleVoiceInput()">
+        🎤 音声入力
+      </button>
+    </div>
+
+    <div class="input-group">
+      <input type="text" id="shopInput" placeholder="例：にんじん、たまねぎ、牛乳（音声可）">
+    </div>
+
+    <button id="shopSaveBtn" class="btn-primary" onclick="addShoppingItem()">追加する</button>
+    <div style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center;">
+      💡 音声入力で「牛乳 と 卵 と パン」と話すとまとめて登録できます
+    </div>
+  </div>
+
+  <!-- 買い物リスト -->
+  <div class="list-header">
+    <div class="list-title">買うものリスト（長押し移動・タップで完了）</div>
+    <div id="shoppingCount" class="list-count">0件</div>
+  </div>
+  <div id="shoppingList" class="item-list"></div>
+</div>
+
+<!-- ================= 設定モーダル ================= -->
+<div id="settingsModal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">設定</div>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <label class="input-label">通知先メールアドレス</label>
+        <input type="text" id="settingEmail" placeholder="example@email.com">
+        <div style="font-size:11px;color:#64748b;margin-top:4px;">
+          賞味期限まで3日以内の食品がある場合、アプリ起動時やチェック時にメール送信（下書き起動）します。
+        </div>
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">設定を保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- トースト表示 -->
+<div id="toast" class="toast"></div>
+
+<script>
+/* ================= アプリ状態 & ストレージ ================= */
+const EXPIRY_KEY = "kitchen_app_expiry_v1";
+const SHOPPING_KEY = "kitchen_app_shopping_v1";
+const SETTINGS_KEY = "kitchen_app_settings_v1";
+
+let expiryItems = [];
+let shoppingItems = [];
+let userSettings = { email: "" };
+
+let currentTab = "expiry";
+let editingExpiryId = null;
+
+// 音声認識
+let recognition = null;
+let expiryRecognition = null;
+let isListening = false;
+let isExpiryListening = false;
+
+/* ================= 初期化 ================= */
+window.onload = () => {
+  loadData();
+  
+  // 今日の日付を初期設定
+  document.getElementById("expAcquireDate").value = getTodayString();
+  
+  renderExpiryList();
+  renderShoppingList();
+  
+  // 音声認識のセットアップ
+  setupSpeechRecognition();
+
+  // メール通知チェック
+  checkExpiryEmailAlert();
+};
+
+function getTodayString() {
+  const d = new Date();
+  return formatDateToStandard(d);
+}
+
+function formatDateToStandard(d) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+function loadData() {
+  try {
+    const exp = localStorage.getItem(EXPIRY_KEY);
+    if (exp) expiryItems = JSON.parse(exp);
+
+    const shop = localStorage.getItem(SHOPPING_KEY);
+    if (shop) shoppingItems = JSON.parse(shop);
+
+    const set = localStorage.getItem(SETTINGS_KEY);
+    if (set) userSettings = JSON.parse(set);
+    document.getElementById("settingEmail").value = userSettings.email || "";
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function saveData() {
+  localStorage.setItem(EXPIRY_KEY, JSON.stringify(expiryItems));
+  localStorage.setItem(SHOPPING_KEY, JSON.stringify(shoppingItems));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
+}
+
+function syncDatePicker(inputId, val) {
+  if (val) {
+    document.getElementById(inputId).value = val;
+  }
+}
+
+/* ================= タブ切替 ================= */
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById("tabExpiry").classList.toggle("active", tab === "expiry");
+  document.getElementById("tabShopping").classList.toggle("active", tab === "shopping");
+  document.getElementById("tabExpiryBtn").classList.toggle("active", tab === "expiry");
+  document.getElementById("tabShoppingBtn").classList.toggle("active", tab === "shopping");
+}
+
+/* ================= 設定 ================= */
+function openSettings() {
+  document.getElementById("settingEmail").value = userSettings.email || "";
+  document.getElementById("settingsModal").classList.add("show");
+}
+function closeSettings() {
+  document.getElementById("settingsModal").classList.remove("show");
+}
+function saveSettings() {
+  userSettings.email = document.getElementById("settingEmail").value.trim();
+  saveData();
+  closeSettings();
+  showToast("設定を保存しました");
+}
+
+/* ================= 一括削除機能 ================= */
+function deleteCheckedItems() {
+  if (currentTab === "expiry") {
+    const checked = expiryItems.filter(i => i.checked);
+    if (checked.length === 0) {
+      showToast("削除する項目にチェックを入れてください");
+      return;
+    }
+    if (confirm(`${checked.length}件の食品を削除しますか？`)) {
+      expiryItems = expiryItems.filter(i => !i.checked);
+      saveData();
+      renderExpiryList();
+      showToast("削除しました");
+    }
+  } else {
+    const checked = shoppingItems.filter(i => i.checked);
+    if (checked.length === 0) {
+      showToast("削除する項目にチェックを入れてください");
+      return;
+    }
+    if (confirm(`${checked.length}件の買い物を削除しますか？`)) {
+      shoppingItems = shoppingItems.filter(i => !i.checked);
+      saveData();
+      renderShoppingList();
+      showToast("削除しました");
+    }
+  }
+}
+
+/* =========================================================
+   【TAB 1】賞味期限管理 ロジック
+========================================================= */
+
+// 日付文字列を YYYY-MM-DD に正規化するヘルパー関数
+function normalizeDateString(dateStr) {
+  if (!dateStr) return "";
+  let s = dateStr.trim().replace(/\./g, '-').replace(/\//g, '-');
+  
+  // 既に YYYY-MM-DD や YYYY-M-D 形式の場合
+  let parts = s.split('-');
+  if (parts.length === 3) {
+    let y = parts[0];
+    let m = parts[1].padStart(2, '0');
+    let d = parts[2].padStart(2, '0');
+    if (y.length === 2) y = "20" + y;
+    return `${y}-${m}-${d}`;
+  }
+  return dateStr;
+}
+
+function saveExpiryItem() {
+  const name = document.getElementById("expName").value.trim();
+  let acquireDate = normalizeDateString(document.getElementById("expAcquireDate").value);
+  let expiryDate = normalizeDateString(document.getElementById("expExpiryDate").value);
+  const location = document.getElementById("expLocation").value;
+
+  if (!name) {
+    alert("商品名を入力してください");
+    return;
+  }
+  if (!expiryDate) {
+    alert("賞味期限を入力してください");
+    return;
+  }
+
+  if (editingExpiryId) {
+    // 編集
+    const item = expiryItems.find(i => i.id === editingExpiryId);
+    if (item) {
+      item.name = name;
+      item.acquireDate = acquireDate;
+      item.expiryDate = expiryDate;
+      item.location = location;
+    }
+    showToast("更新しました");
+  } else {
+    // 新規登録
+    const newItem = {
+      id: "exp_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+      name,
+      acquireDate: acquireDate || getTodayString(),
+      expiryDate,
+      location,
+      checked: false
+    };
+    expiryItems.push(newItem);
+    showToast("追加しました");
+  }
+
+  saveData();
+  resetExpiryForm();
+  renderExpiryList();
+  checkExpiryEmailAlert();
+}
+
+function editExpiryItem(id) {
+  const item = expiryItems.find(i => i.id === id);
+  if (!item) return;
+
+  editingExpiryId = id;
+  document.getElementById("expName").value = item.name;
+  document.getElementById("expAcquireDate").value = item.acquireDate;
+  document.getElementById("expExpiryDate").value = item.expiryDate;
+  document.getElementById("expLocation").value = item.location;
+
+  document.getElementById("expiryFormTitle").textContent = "📝 食品情報を変更";
+  document.getElementById("expSaveBtn").textContent = "変更を保存";
+  document.getElementById("expCancelBtn").style.display = "block";
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetExpiryForm() {
+  editingExpiryId = null;
+  document.getElementById("expName").value = "";
+  document.getElementById("expAcquireDate").value = getTodayString();
+  document.getElementById("expExpiryDate").value = "";
+  document.getElementById("expLocation").value = "冷蔵";
+
+  document.getElementById("expiryFormTitle").textContent = "＋ 食品を登録";
+  document.getElementById("expSaveBtn").textContent = "登録する";
+  document.getElementById("expCancelBtn").style.display = "none";
+}
+
+function toggleExpiryCheck(id, e) {
+  e.stopPropagation();
+  const item = expiryItems.find(i => i.id === id);
+  if (item) {
+    item.checked = !item.checked;
+    saveData();
+    renderExpiryList();
+  }
+}
+
+// 賞味期限順に並べ替え ＆ リアルタイムフィルタ ＆ レンダリング
+function renderExpiryList() {
+  const container = document.getElementById("expiryList");
+  const countEl = document.getElementById("expiryCount");
+  const filterKeyword = document.getElementById("expFilterInput").value.trim().toLowerCase();
+
+  // 近い順にソート
+  expiryItems.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+
+  // リアルタイムフィルタ適用
+  const filteredItems = expiryItems.filter(item => {
+    if (!filterKeyword) return true;
+    return item.name.toLowerCase().includes(filterKeyword) || 
+           item.location.toLowerCase().includes(filterKeyword) ||
+           item.expiryDate.includes(filterKeyword);
+  });
+
+  countEl.textContent = `${filteredItems.length} / ${expiryItems.length}件`;
+  container.innerHTML = "";
+
+  if (filteredItems.length === 0) {
+    container.innerHTML = filterKeyword 
+      ? '<div class="empty-state">一致する食品が見つかりません</div>'
+      : '<div class="empty-state">登録されている食品はありません</div>';
+    return;
+  }
+
+  const today = new Date(getTodayString());
+
+  filteredItems.forEach(item => {
+    const expDate = new Date(item.expiryDate);
+    const diffTime = expDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let badgeClass = "badge-normal";
+    let badgeText = `あと${diffDays}日`;
+
+    if (isNaN(diffDays)) {
+      badgeClass = "badge-normal";
+      badgeText = item.expiryDate;
+    } else if (diffDays < 0) {
+      badgeClass = "badge-danger";
+      badgeText = `期限切れ (${Math.abs(diffDays)}日前)`;
+    } else if (diffDays === 0) {
+      badgeClass = "badge-danger";
+      badgeText = "本日まで";
+    } else if (diffDays <= 3) {
+      badgeClass = "badge-warning";
+      badgeText = `あと${diffDays}日`;
+    }
+
+    const card = document.createElement("div");
+    card.className = "item-card";
+    
+    card.innerHTML = `
+      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleExpiryCheck('${item.id}', event)">
+      <div class="item-body" onclick="editExpiryItem('${item.id}')">
+        <div class="item-title">${escapeHtml(item.name)}</div>
+        <div class="item-meta">
+          <span class="badge ${badgeClass}">${badgeText}</span>
+          <span class="badge badge-location">${item.location}</span>
+          <span>取得: ${item.acquireDate}</span>
+          <span>期限: ${item.expiryDate}</span>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+// メール通知機能（3日前のチェック＆mailto trigger）
+function checkExpiryEmailAlert() {
+  if (!userSettings.email) return;
+
+  const today = new Date(getTodayString());
+  const alertItems = expiryItems.filter(item => {
+    const expDate = new Date(item.expiryDate);
+    const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+    return diffDays <= 3; // 3日以内または期限切れ
+  });
+
+  if (alertItems.length > 0) {
+    const lastNotified = localStorage.getItem("last_notified_date");
+    const todayStr = getTodayString();
+
+    // 1日1回だけ確認ダイアログ
+    if (lastNotified !== todayStr) {
+      const names = alertItems.map(i => `・${i.name} (${i.expiryDate})`).join('\n');
+      if (confirm(`【賞味期限通知】\n以下の食品の賞味期限が接近・超過しています。\n通知メールを作成しますか？\n\n${names}`)) {
+        sendNotificationEmail(alertItems);
+      }
+      localStorage.setItem("last_notified_date", todayStr);
+    }
+  }
+}
+
+function sendNotificationEmail(items) {
+  const subject = encodeURIComponent("【賞味期限リマインダー】期限が近い食品があります");
+  const bodyList = items.map(i => `・${i.name} (期限: ${i.expiryDate} / 場所: ${i.location})`).join('%0D%0A');
+  const body = encodeURIComponent(`以下の食品の賞味期限が3日以内、または期限切れです。確認してください。%0D%0A%0D%0A`) + bodyList;
+  
+  window.location.href = `mailto:${userSettings.email}?subject=${subject}&body=${body}`;
+}
+
+/* =========================================================
+   【TAB 2】買い物リスト ロジック
+========================================================= */
+
+function addShoppingItem() {
+  const input = document.getElementById("shopInput");
+  const text = input.value.trim();
+
+  if (!text) {
+    alert("項目を入力してください");
+    return;
+  }
+
+  // 「と」や「、」でまとめて登録
+  const items = text.split(/[\s、,と]+/);
+
+  items.forEach(name => {
+    if (name.trim()) {
+      shoppingItems.push({
+        id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+        name: name.trim(),
+        purchased: false,
+        checked: false
+      });
+    }
+  });
+
+  saveData();
+  input.value = "";
+  renderShoppingList();
+  showToast("買い物リストに追加しました");
+}
+
+function togglePurchased(id) {
+  const item = shoppingItems.find(i => i.id === id);
+  if (item) {
+    item.purchased = !item.purchased;
+    saveData();
+    renderShoppingList();
+  }
+}
+
+function toggleShoppingCheck(id, e) {
+  e.stopPropagation();
+  const item = shoppingItems.find(i => i.id === id);
+  if (item) {
+    item.checked = !item.checked;
+    saveData();
+    renderShoppingList();
+  }
+}
+
+function editShoppingName(id) {
+  const item = shoppingItems.find(i => i.id === id);
+  if (!item) return;
+
+  const newName = prompt("買い物項目名を変更", item.name);
+  if (newName !== null && newName.trim() !== "") {
+    item.name = newName.trim();
+    saveData();
+    renderShoppingList();
+  }
+}
+
+// 買い物リストの描画 ＆ ドラッグ＆ドロップ実装
+function renderShoppingList() {
+  const container = document.getElementById("shoppingList");
+  const countEl = document.getElementById("shoppingCount");
+
+  countEl.textContent = `${shoppingItems.length}件`;
+  container.innerHTML = "";
+
+  if (shoppingItems.length === 0) {
+    container.innerHTML = '<div class="empty-state">買い物リストは空です</div>';
+    return;
+  }
+
+  shoppingItems.forEach((item, index) => {
+    const card = document.createElement("div");
+    card.className = `item-card shopping-item ${item.purchased ? 'purchased' : ''}`;
+    card.draggable = true;
+    card.dataset.index = index;
+
+    card.innerHTML = `
+      <div class="drag-handle">☰</div>
+      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleShoppingCheck('${item.id}', event)">
+      <div class="item-body" onclick="togglePurchased('${item.id}')">
+        <div class="item-title">${escapeHtml(item.name)}</div>
+      </div>
+      <button style="background:transparent;box-shadow:none;color:#94a3b8;font-size:14px;padding:4px 8px;" onclick="editShoppingName('${item.id}')">✏️</button>
+    `;
+
+    // ドラッグ＆ドロップイベント設定
+    addDragEvents(card);
+
+    container.appendChild(card);
+  });
+}
+
+/* ドラッグ＆ドロップ (Touch & Mouse 対応) */
+let dragSrcIndex = null;
+
+function addDragEvents(elem) {
+  elem.addEventListener('dragstart', (e) => {
+    dragSrcIndex = Number(elem.dataset.index);
+    elem.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  elem.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  elem.addEventListener('dragenter', (e) => {
+    elem.style.border = "2px dashed #3b82f6";
+  });
+
+  elem.addEventListener('dragleave', (e) => {
+    elem.style.border = "1px solid #f1f5f9";
+  });
+
+  elem.addEventListener('drop', (e) => {
+    e.stopPropagation();
+    elem.style.border = "1px solid #f1f5f9";
+    const targetIndex = Number(elem.dataset.index);
+
+    if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
+      const movedItem = shoppingItems.splice(dragSrcIndex, 1)[0];
+      shoppingItems.splice(targetIndex, 0, movedItem);
+      saveData();
+      renderShoppingList();
+    }
+  });
+
+  elem.addEventListener('dragend', () => {
+    elem.classList.remove('dragging');
+  });
+
+  // タッチ長押しからの並べ替え（スマホ対応）
+  let touchTimer = null;
+  elem.addEventListener('touchstart', (e) => {
+    if (e.target.classList.contains('drag-handle')) {
+      touchTimer = setTimeout(() => {
+        elem.classList.add('dragging');
+      }, 300);
+    }
+  }, { passive: true });
+
+  elem.addEventListener('touchend', () => {
+    clearTimeout(touchTimer);
+    elem.classList.remove('dragging');
+  });
+}
+
+/* ================= 音声入力機能 ================= */
+function setupSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  // 買い物リスト用音声認識
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    isListening = true;
+    const btn = document.getElementById("shopMicBtn");
+    btn.classList.add("listening");
+    btn.textContent = "🔴 音声受付中...";
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    document.getElementById("shopInput").value = transcript;
+    showToast(`「${transcript}」を認識しました`);
+  };
+
+  recognition.onerror = () => {
+    showToast("音声を認識できませんでした");
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    const btn = document.getElementById("shopMicBtn");
+    btn.classList.remove("listening");
+    btn.textContent = "🎤 音声入力";
+  };
+
+  // 賞味期限管理用音声認識
+  expiryRecognition = new SpeechRecognition();
+  expiryRecognition.lang = 'ja-JP';
+  expiryRecognition.continuous = false;
+  expiryRecognition.interimResults = false;
+
+  expiryRecognition.onstart = () => {
+    isExpiryListening = true;
+    const btn = document.getElementById("expMicBtn");
+    btn.classList.add("listening");
+    btn.textContent = "🔴 音声受付中...";
+  };
+
+  expiryRecognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    parseAndSetExpiryVoiceInput(transcript);
+  };
+
+  expiryRecognition.onerror = () => {
+    showToast("音声を認識できませんでした");
+  };
+
+  expiryRecognition.onend = () => {
+    isExpiryListening = false;
+    const btn = document.getElementById("expMicBtn");
+    btn.classList.remove("listening");
+    btn.textContent = "🎤 音声入力";
+  };
+}
+
+// 「商品名 年月日」の音声結果を自動分解・入力する処理
+function parseAndSetExpiryVoiceInput(text) {
+  showToast(`「${text}」を解析中...`);
+
+  // 多様な日付表現（2026年10月19日, 10月19日, 2026/10/19, 10/19 等）を抽出する正規表現
+  const dateRegex = /((?:20\d{2}|\d{2})[年.\/-])?(\d{1,2})[月.\/-](\d{1,2})日?/;
+  const match = text.match(dateRegex);
+
+  let productName = text;
+  let formattedDate = "";
+
+  if (match) {
+    const now = new Date();
+    let year = match[1] ? match[1].replace(/[年.\/-]/g, '') : now.getFullYear().toString();
+    if (year.length === 2) year = "20" + year;
+    let month = match[2].padStart(2, '0');
+    let day = match[3].padStart(2, '0');
+
+    formattedDate = `${year}-${month}-${day}`;
+    // 音声テキストから日付部分を取り除いた残りを商品名とする
+    productName = text.replace(match[0], '').trim();
+  }
+
+  if (productName) {
+    document.getElementById("expName").value = productName;
+  }
+  if (formattedDate) {
+    document.getElementById("expExpiryDate").value = formattedDate;
+    showToast(`「${productName}」/ 期限: ${formattedDate} にセットしました`);
+  } else {
+    showToast(`「${productName}」を認識しました（日付は手入力してください）`);
+  }
+}
+
+function toggleVoiceInput() {
+  if (!recognition) {
+    alert("お使いのブラウザは音声入力に対応していません。");
+    return;
+  }
+  if (isListening) {
+    recognition.stop();
+  } else {
+    recognition.start();
+  }
+}
+
+function toggleExpiryVoiceInput() {
+  if (!expiryRecognition) {
+    alert("お使いのブラウザは音声入力に対応していません。");
+    return;
+  }
+  if (isExpiryListening) {
+    expiryRecognition.stop();
+  } else {
+    expiryRecognition.start();
+  }
+}
+
+/* エスケープ関数 */
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, function(m) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    }[m];
+  });
+}
+</script>
+
+</body>
+</html>
