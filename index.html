@@ -323,9 +323,15 @@ input[type="text"], select, textarea{
 }
 .modal-body{padding:16px;overflow-y:auto}
 
-/* リアルタイムフィルタ用検索窓 */
+/* リアルタイムフィルタ用検索窓の入力枠スタイル */
 .filter-box {
   margin-bottom: 12px;
+}
+.filter-box input[type="text"] {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0,0,0,.04);
+  font-size: 14px;
 }
 
 /* トースト通知 */
@@ -386,7 +392,7 @@ input[type="text"], select, textarea{
     
     <div class="input-group">
       <label class="input-label">商品名</label>
-      <input type="text" id="expName" placeholder="例：牛乳、豆腐、卵（音声入力可）">
+      <input type="text" id="expName" placeholder="例：牛乳、豆腐、卵">
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="input-group">
@@ -415,10 +421,10 @@ input[type="text"], select, textarea{
     <div class="input-group">
       <label class="input-label">保存場所</label>
       <select id="expLocation">
+        <option value="パントリー">パントリー</option>
         <option value="冷蔵">冷蔵室</option>
         <option value="冷凍">冷凍室</option>
         <option value="野菜">野菜室</option>
-        <option value="常温">常温 / パントリー</option>
       </select>
     </div>
 
@@ -429,9 +435,9 @@ input[type="text"], select, textarea{
     </div>
   </div>
 
-  <!-- リアルタイムフィルタ機能（検索窓） -->
+  <!-- リアルタイムフィルタ機能（検索窓の入力枠） -->
   <div class="filter-box">
-    <input type="text" id="expFilterInput" placeholder="🔍 食品を検索... (リアルタイムフィルタ)" oninput="renderExpiryList()">
+    <input type="text" id="expFilterInput" placeholder="🔍 検索..." oninput="renderExpiryList()">
   </div>
 
   <!-- 賞味期限リスト -->
@@ -448,19 +454,19 @@ input[type="text"], select, textarea{
   <!-- 音声入力＆追加カード -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="font-size:14px;font-weight:700;color:#334155;">買い物項目を追加</div>
+      <div style="font-size:14px;font-weight:700;color:#334155;">+買い物アイテムを追加</div>
       <button id="shopMicBtn" class="header-btn mic-btn" style="width:auto;padding:0 10px;height:32px;font-size:12px;" onclick="toggleVoiceInput()">
         🎤 音声入力
       </button>
     </div>
 
     <div class="input-group">
-      <input type="text" id="shopInput" placeholder="例：にんじん、たまねぎ、牛乳（音声可）">
+      <input type="text" id="shopInput" placeholder="例：にんじん、たまねぎ、牛乳">
     </div>
 
     <button id="shopSaveBtn" class="btn-primary" onclick="addShoppingItem()">追加する</button>
     <div style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center;">
-      💡 音声入力で「牛乳 と 卵 と パン」と話すとまとめて登録できます
+      💡 音声入力で「牛乳 と 卵 と パン」と話すと切れ目ごとに直接登録されます
     </div>
   </div>
 
@@ -635,27 +641,49 @@ function deleteCheckedItems() {
    【TAB 1】賞味期限管理 ロジック
 ========================================================= */
 
-// 日付文字列を YYYY-MM-DD に正規化するヘルパー関数
-function normalizeDateString(dateStr) {
+// カタカナをひらがなに変換して表記ゆれをなくすヘルパー関数
+function normalizeKana(str) {
+  if (!str) return "";
+  return str.toLowerCase().replace(/[\u30a1-\u30f6]/g, match => {
+    return String.fromCharCode(match.charCodeAt(0) - 0x60);
+  });
+}
+
+// 日付文字列を解析し、年省略時は未来の直近の年（年末年始跨ぎ対応）を自動補完する関数
+function parseFlexibleDate(dateStr) {
   if (!dateStr) return "";
-  let s = dateStr.trim().replace(/\./g, '-').replace(/\//g, '-');
+  let s = dateStr.trim().replace(/\./g, '-').replace(/\//g, '-').replace(/[年月]/g, '-').replace(/日/g, '');
+  let parts = s.split('-').filter(Boolean);
   
-  // 既に YYYY-MM-DD や YYYY-M-D 形式の場合
-  let parts = s.split('-');
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
   if (parts.length === 3) {
     let y = parts[0];
     let m = parts[1].padStart(2, '0');
     let d = parts[2].padStart(2, '0');
     if (y.length === 2) y = "20" + y;
     return `${y}-${m}-${d}`;
+  } else if (parts.length === 2) {
+    let m = parts[0];
+    let d = parts[1];
+    let targetYear = currentYear;
+    
+    // 今年のその月日を設定
+    let testDate = new Date(targetYear, parseInt(m) - 1, parseInt(d));
+    // もし今年のその日付が今日より過去であれば翌年に繰り越す（未来の直近・年末年始跨ぎ）
+    if (testDate < now) {
+      targetYear += 1;
+    }
+    return `${targetYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   return dateStr;
 }
 
 function saveExpiryItem() {
   const name = document.getElementById("expName").value.trim();
-  let acquireDate = normalizeDateString(document.getElementById("expAcquireDate").value);
-  let expiryDate = normalizeDateString(document.getElementById("expExpiryDate").value);
+  let acquireDate = parseFlexibleDate(document.getElementById("expAcquireDate").value);
+  let expiryDate = parseFlexibleDate(document.getElementById("expExpiryDate").value);
   const location = document.getElementById("expLocation").value;
 
   if (!name) {
@@ -736,21 +764,24 @@ function toggleExpiryCheck(id, e) {
   }
 }
 
-// 賞味期限順に並べ替え ＆ リアルタイムフィルタ ＆ レンダリング
+// 賞味期限順に並べ替え ＆ 表記ゆれ対応リアルタイムフィルタ ＆ レンダリング
 function renderExpiryList() {
   const container = document.getElementById("expiryList");
   const countEl = document.getElementById("expiryCount");
-  const filterKeyword = document.getElementById("expFilterInput").value.trim().toLowerCase();
+  const rawFilterKeyword = document.getElementById("expFilterInput").value.trim();
+  const filterKeyword = normalizeKana(rawFilterKeyword);
 
   // 近い順にソート
   expiryItems.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-  // リアルタイムフィルタ適用
+  // リアルタイムフィルタ適用（表記ゆれ対応：ひらがな・カタカナ同一視）
   const filteredItems = expiryItems.filter(item => {
     if (!filterKeyword) return true;
-    return item.name.toLowerCase().includes(filterKeyword) || 
-           item.location.toLowerCase().includes(filterKeyword) ||
-           item.expiryDate.includes(filterKeyword);
+    const normName = normalizeKana(item.name);
+    const normLocation = normalizeKana(item.location);
+    return normName.includes(filterKeyword) || 
+           normLocation.includes(filterKeyword) ||
+           item.expiryDate.includes(rawFilterKeyword);
   });
 
   countEl.textContent = `${filteredItems.length} / ${expiryItems.length}件`;
@@ -1001,10 +1032,10 @@ function setupSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
-  // 買い物リスト用音声認識
+  // 買い物リスト用音声認識（無音許容を長くするため continuous = true に設定）
   recognition = new SpeechRecognition();
   recognition.lang = 'ja-JP';
-  recognition.continuous = false;
+  recognition.continuous = true;
   recognition.interimResults = false;
 
   recognition.onstart = () => {
@@ -1015,9 +1046,34 @@ function setupSpeechRecognition() {
   };
 
   recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      transcript += event.results[i][0].transcript;
+    }
     document.getElementById("shopInput").value = transcript;
-    showToast(`「${transcript}」を認識しました`);
+
+    // 切れ目（と、読点、スペース等）ごとに直接買い物リストに登録する
+    const items = transcript.split(/[\s、,と]+/);
+    let addedCount = 0;
+    items.forEach(name => {
+      const trimmed = name.trim();
+      if (trimmed) {
+        // 重複防止として既に直近追加されていないか確認するか、そのまま追加する
+        shoppingItems.push({
+          id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+          name: trimmed,
+          purchased: false,
+          checked: false
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      saveData();
+      renderShoppingList();
+      showToast(`「${transcript}」から項目を直接追加しました`);
+    }
   };
 
   recognition.onerror = () => {
@@ -1061,11 +1117,10 @@ function setupSpeechRecognition() {
   };
 }
 
-// 「商品名 年月日」の音声結果を自動分解・入力する処理
+// 「商品名 年月日」の音声結果を自動分解・入力する処理（年省略時は未来の直近を自動補完）
 function parseAndSetExpiryVoiceInput(text) {
   showToast(`「${text}」を解析中...`);
 
-  // 多様な日付表現（2026年10月19日, 10月19日, 2026/10/19, 10/19 等）を抽出する正規表現
   const dateRegex = /((?:20\d{2}|\d{2})[年.\/-])?(\d{1,2})[月.\/-](\d{1,2})日?/;
   const match = text.match(dateRegex);
 
@@ -1074,13 +1129,24 @@ function parseAndSetExpiryVoiceInput(text) {
 
   if (match) {
     const now = new Date();
-    let year = match[1] ? match[1].replace(/[年.\/-]/g, '') : now.getFullYear().toString();
-    if (year.length === 2) year = "20" + year;
-    let month = match[2].padStart(2, '0');
-    let day = match[3].padStart(2, '0');
+    const currentYear = now.getFullYear();
+    let month = match[2];
+    let day = match[3];
 
-    formattedDate = `${year}-${month}-${day}`;
-    // 音声テキストから日付部分を取り除いた残りを商品名とする
+    let targetYear = currentYear;
+    if (match[1]) {
+      let y = match[1].replace(/[年.\/-]/g, '');
+      if (y.length === 2) y = "20" + y;
+      targetYear = parseInt(y);
+    } else {
+      // 年が省略されている場合：年末年始の年跨ぎ（未来の直近）を考慮
+      let testDate = new Date(targetYear, parseInt(month) - 1, parseInt(day));
+      if (testDate < now) {
+        targetYear += 1;
+      }
+    }
+
+    formattedDate = `${targetYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     productName = text.replace(match[0], '').trim();
   }
 
