@@ -212,6 +212,31 @@ input[type="text"], select, textarea{
 
 .item-list{display:flex;flex-direction:column;gap:8px}
 
+/* 左側の情報エリア（商品名・バッジ） */
+.item-left-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 右側に配置する取得日・期限日の縦並びエリア */
+.item-dates {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 11px;
+  color: #64748b;
+  margin-left: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* カードの中身を左右に配置するフレックスコンテナ */
+.item-card .item-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .item-card{
   display:flex;
   align-items:center;
@@ -428,22 +453,25 @@ input[type="text"], select, textarea{
       <input type="text" id="expName" placeholder="例：牛乳、豆腐、卵">
     </div>
 
-    <div class="input-group" style="margin-top: 4px;">
-      <label class="input-label" style="margin-bottom: 2px;">取得日</label>
-      <div class="date-input-wrapper" style="margin-bottom: 10px;">
-        <input type="text" id="expAcquireDate" placeholder="YYYY-MM-DD">
-        <div class="date-picker-trigger">
-          📅
-          <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expAcquireDate', this.value)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="input-group">
+      <div>
+        <label class="input-label">取得日</label>
+        <div class="date-input-wrapper">
+          <input type="text" id="expAcquireDate" placeholder="YYYY-MM-DD">
+          <div class="date-picker-trigger">
+            📅
+            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expAcquireDate', this.value)">
+          </div>
         </div>
       </div>
-
-      <label class="input-label">賞味期限</label>
-      <div class="date-input-wrapper">
-        <input type="text" id="expExpiryDate" placeholder="YYYY-MM-DD">
-        <div class="date-picker-trigger">
-          📅
-          <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expExpiryDate', this.value)">
+      <div>
+        <label class="input-label">賞味期限</label>
+        <div class="date-input-wrapper">
+          <input type="text" id="expExpiryDate" placeholder="YYYY-MM-DD">
+          <div class="date-picker-trigger">
+            📅
+            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expExpiryDate', this.value)">
+          </div>
         </div>
       </div>
     </div>
@@ -907,10 +935,14 @@ function renderExpiryList() {
     card.innerHTML = `
       <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleExpiryCheck('${item.firestoreId}', event)">
       <div class="item-body" onclick="editExpiryItem('${item.firestoreId}')">
-        <div class="item-title">${escapeHtml(item.name)}</div>
-        <div class="item-meta">
-          <span class="badge ${badgeClass}">${badgeText}</span>
-          <span class="badge badge-location">${item.location}</span>
+        <div class="item-left-content">
+          <div class="item-title">${escapeHtml(item.name)}</div>
+          <div class="item-meta">
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <span class="badge badge-location">${item.location}</span>
+          </div>
+        </div>
+        <div class="item-dates">
           <span>取得: ${item.acquireDate}</span>
           <span>期限: ${item.expiryDate}</span>
         </div>
