@@ -5,6 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>賞味期限 & 買い物リスト</title>
 
+<!-- Firebase SDK (Modular) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // ★ここに取得したFirebase設定を貼り付けてください
+  const firebaseConfig = {
+    apiKey: "AIzaSyC8KdpY6zPlg2t9LaTIY2tkps-RkBYnH98",
+    authDomain: "foodstockmanagement.firebaseapp.com",
+    projectId: "foodstockmanagement",
+    storageBucket: "foodstockmanagement.firebasestorage.app",
+    messagingSenderId: "486852259773",
+    appId: "1:486852259773:web:4971f05d8383753e29ecd4"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // グローバルから呼び出せるようにwindowにバインド
+  window.db = db;
+  window.colExpiry = collection(db, "expiryItems");
+  window.colShopping = collection(db, "shoppingItems");
+  window.onSnapshot = onSnapshot;
+  window.addDoc = addDoc;
+  window.updateDoc = updateDoc;
+  window.deleteDoc = deleteDoc;
+  window.doc = doc;
+  window.setDoc = setDoc;
+
+  // Firebase初期化完了後にデータリスナーを起動
+  window.initFirebaseSync();
+</script>
+
 <style>
 *{box-sizing:border-box}
 body{
@@ -395,25 +428,22 @@ input[type="text"], select, textarea{
       <input type="text" id="expName" placeholder="例：牛乳、豆腐、卵">
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" class="input-group">
-      <div>
-        <label class="input-label">取得日</label>
-        <div class="date-input-wrapper">
-          <input type="text" id="expAcquireDate" placeholder="YYYY-MM-DD">
-          <div class="date-picker-trigger">
-            📅
-            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expAcquireDate', this.value)">
-          </div>
+    <div class="input-group" style="margin-top: 4px;">
+      <label class="input-label" style="margin-bottom: 2px;">取得日</label>
+      <div class="date-input-wrapper" style="margin-bottom: 10px;">
+        <input type="text" id="expAcquireDate" placeholder="YYYY-MM-DD">
+        <div class="date-picker-trigger">
+          📅
+          <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expAcquireDate', this.value)">
         </div>
       </div>
-      <div>
-        <label class="input-label">賞味期限</label>
-        <div class="date-input-wrapper">
-          <input type="text" id="expExpiryDate" placeholder="YYYY-MM-DD">
-          <div class="date-picker-trigger">
-            📅
-            <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expExpiryDate', this.value)">
-          </div>
+
+      <label class="input-label">賞味期限</label>
+      <div class="date-input-wrapper">
+        <input type="text" id="expExpiryDate" placeholder="YYYY-MM-DD">
+        <div class="date-picker-trigger">
+          📅
+          <input type="date" class="hidden-date-picker" onchange="syncDatePicker('expExpiryDate', this.value)">
         </div>
       </div>
     </div>
@@ -431,7 +461,7 @@ input[type="text"], select, textarea{
     <button id="expSaveBtn" class="btn-primary" onclick="saveExpiryItem()">登録する</button>
     <button id="expCancelBtn" class="btn-secondary" style="width:100%;margin-top:6px;display:none;" onclick="resetExpiryForm()">キャンセル</button>
     <div style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center;">
-      💡 音声で「牛乳 2026年11月5日」や「豆腐 11月10日」と喋ると自動入力されます
+      💡 音声で「牛乳 2026年11月5日」や「豆腐 11月10日」<br>と喋ると自動入力されます
     </div>
   </div>
 
@@ -466,7 +496,7 @@ input[type="text"], select, textarea{
 
     <button id="shopSaveBtn" class="btn-primary" onclick="addShoppingItem()">追加する</button>
     <div style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center;">
-      💡 音声入力で「牛乳 と 卵 と パン」と話すと切れ目ごとに直接登録されます
+      💡 音声入力で「牛乳 と 卵 と パン」と話すと<br>切れ目ごとに登録されます
     </div>
   </div>
 
@@ -502,9 +532,7 @@ input[type="text"], select, textarea{
 <div id="toast" class="toast"></div>
 
 <script>
-/* ================= アプリ状態 & ストレージ ================= */
-const EXPIRY_KEY = "kitchen_app_expiry_v1";
-const SHOPPING_KEY = "kitchen_app_shopping_v1";
+/* ================= アプリ状態 & Firestore同期 ================= */
 const SETTINGS_KEY = "kitchen_app_settings_v1";
 
 let expiryItems = [];
@@ -522,20 +550,90 @@ let isExpiryListening = false;
 
 /* ================= 初期化 ================= */
 window.onload = () => {
-  loadData();
-  
-  // 今日の日付を初期設定
+  loadSettings();
   document.getElementById("expAcquireDate").value = getTodayString();
-  
-  renderExpiryList();
-  renderShoppingList();
-  
-  // 音声認識のセットアップ
   setupSpeechRecognition();
-
-  // メール通知チェック
-  checkExpiryEmailAlert();
 };
+
+// Firebaseのリアルタイム同期 ＆ 旧LocalStorageからの移行を設定する関数
+window.initFirebaseSync = async function() {
+  // 1. LocalStorageに旧データがあれば、Firebaseへ自動移行する
+  await migrateLocalStorageToFirebase();
+
+  // 2. 賞味期限データのリアルタイムリスナー
+  window.onSnapshot(window.colExpiry, (snapshot) => {
+    expiryItems = [];
+    snapshot.forEach((docSnap) => {
+      expiryItems.push({ firestoreId: docSnap.id, ...docSnap.data() });
+    });
+    renderExpiryList();
+    checkExpiryEmailAlert();
+  });
+
+  // 3. 買い物リストのリアルタイムリスナー
+  window.onSnapshot(window.colShopping, (snapshot) => {
+    shoppingItems = [];
+    snapshot.forEach((docSnap) => {
+      shoppingItems.push({ firestoreId: docSnap.id, ...docSnap.data() });
+    });
+    renderShoppingList();
+  });
+};
+
+// LocalStorageのデータをFirestoreへ一度だけ移行する関数
+async function migrateLocalStorageToFirebase() {
+  const EXPIRY_KEY = "kitchen_app_expiry_v1";
+  const SHOPPING_KEY = "kitchen_app_shopping_v1";
+
+  // 賞味期限データの移行
+  const oldExp = localStorage.getItem(EXPIRY_KEY);
+  if (oldExp) {
+    try {
+      const items = JSON.parse(oldExp);
+      if (items && items.length > 0) {
+        console.log("賞味期限データの移行を開始します...");
+        for (let item of items) {
+          // 不要なローカルID等を除外してFirebaseへ追加
+          await window.addDoc(window.colExpiry, {
+            name: item.name || "",
+            acquireDate: item.acquireDate || "",
+            expiryDate: item.expiryDate || "",
+            location: item.location || "パントリー",
+            checked: !!item.checked
+          });
+        }
+        // 移行が完了したら古いLocalStorageを削除
+        localStorage.removeItem(EXPIRY_KEY);
+        console.log("賞味期限データの移行が完了しました！");
+      }
+    } catch (e) {
+      console.error("賞味期限データの移行に失敗しました:", e);
+    }
+  }
+
+  // 買い物リストデータの移行
+  const oldShop = localStorage.getItem(SHOPPING_KEY);
+  if (oldShop) {
+    try {
+      const items = JSON.parse(oldShop);
+      if (items && items.length > 0) {
+        console.log("買い物リストデータの移行を開始します...");
+        for (let item of items) {
+          await window.addDoc(window.colShopping, {
+            name: item.name || "",
+            purchased: !!item.purchased,
+            checked: !!item.checked
+          });
+        }
+        // 移行が完了したら古いLocalStorageを削除
+        localStorage.removeItem(SHOPPING_KEY);
+        console.log("買い物リストデータの移行が完了しました！");
+      }
+    } catch (e) {
+      console.error("買い物リストデータの移行に失敗しました:", e);
+    }
+  }
+}
 
 function getTodayString() {
   const d = new Date();
@@ -556,14 +654,8 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove("show"), 2500);
 }
 
-function loadData() {
+function loadSettings() {
   try {
-    const exp = localStorage.getItem(EXPIRY_KEY);
-    if (exp) expiryItems = JSON.parse(exp);
-
-    const shop = localStorage.getItem(SHOPPING_KEY);
-    if (shop) shoppingItems = JSON.parse(shop);
-
     const set = localStorage.getItem(SETTINGS_KEY);
     if (set) userSettings = JSON.parse(set);
     document.getElementById("settingEmail").value = userSettings.email || "";
@@ -572,9 +664,7 @@ function loadData() {
   }
 }
 
-function saveData() {
-  localStorage.setItem(EXPIRY_KEY, JSON.stringify(expiryItems));
-  localStorage.setItem(SHOPPING_KEY, JSON.stringify(shoppingItems));
+function saveSettingsToStorage() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
 }
 
@@ -603,13 +693,13 @@ function closeSettings() {
 }
 function saveSettings() {
   userSettings.email = document.getElementById("settingEmail").value.trim();
-  saveData();
+  saveSettingsToStorage();
   closeSettings();
   showToast("設定を保存しました");
 }
 
 /* ================= 一括削除機能 ================= */
-function deleteCheckedItems() {
+async function deleteCheckedItems() {
   if (currentTab === "expiry") {
     const checked = expiryItems.filter(i => i.checked);
     if (checked.length === 0) {
@@ -617,9 +707,9 @@ function deleteCheckedItems() {
       return;
     }
     if (confirm(`${checked.length}件の食品を削除しますか？`)) {
-      expiryItems = expiryItems.filter(i => !i.checked);
-      saveData();
-      renderExpiryList();
+      for (let item of checked) {
+        await window.deleteDoc(window.doc(window.db, "expiryItems", item.firestoreId));
+      }
       showToast("削除しました");
     }
   } else {
@@ -629,9 +719,9 @@ function deleteCheckedItems() {
       return;
     }
     if (confirm(`${checked.length}件の買い物を削除しますか？`)) {
-      shoppingItems = shoppingItems.filter(i => !i.checked);
-      saveData();
-      renderShoppingList();
+      for (let item of checked) {
+        await window.deleteDoc(window.doc(window.db, "shoppingItems", item.firestoreId));
+      }
       showToast("削除しました");
     }
   }
@@ -641,7 +731,6 @@ function deleteCheckedItems() {
    【TAB 1】賞味期限管理 ロジック
 ========================================================= */
 
-// カタカナをひらがなに変換して表記ゆれをなくすヘルパー関数
 function normalizeKana(str) {
   if (!str) return "";
   return str.toLowerCase().replace(/[\u30a1-\u30f6]/g, match => {
@@ -649,7 +738,6 @@ function normalizeKana(str) {
   });
 }
 
-// 日付文字列を解析し、年省略時は未来の直近の年（年末年始跨ぎ対応）を自動補完する関数
 function parseFlexibleDate(dateStr) {
   if (!dateStr) return "";
   let s = dateStr.trim().replace(/\./g, '-').replace(/\//g, '-').replace(/[年月]/g, '-').replace(/日/g, '');
@@ -669,9 +757,7 @@ function parseFlexibleDate(dateStr) {
     let d = parts[1];
     let targetYear = currentYear;
     
-    // 今年のその月日を設定
     let testDate = new Date(targetYear, parseInt(m) - 1, parseInt(d));
-    // もし今年のその日付が今日より過去であれば翌年に繰り越す（未来の直近・年末年始跨ぎ）
     if (testDate < now) {
       targetYear += 1;
     }
@@ -680,7 +766,7 @@ function parseFlexibleDate(dateStr) {
   return dateStr;
 }
 
-function saveExpiryItem() {
+async function saveExpiryItem() {
   const name = document.getElementById("expName").value.trim();
   let acquireDate = parseFlexibleDate(document.getElementById("expAcquireDate").value);
   let expiryDate = parseFlexibleDate(document.getElementById("expExpiryDate").value);
@@ -696,13 +782,16 @@ function saveExpiryItem() {
   }
 
   if (editingExpiryId) {
-    // 編集
-    const item = expiryItems.find(i => i.id === editingExpiryId);
+    // 編集更新
+    const item = expiryItems.find(i => i.id === editingExpiryId || i.firestoreId === editingExpiryId);
     if (item) {
-      item.name = name;
-      item.acquireDate = acquireDate;
-      item.expiryDate = expiryDate;
-      item.location = location;
+      const docRef = window.doc(window.db, "expiryItems", item.firestoreId);
+      await window.updateDoc(docRef, {
+        name,
+        acquireDate,
+        expiryDate,
+        location
+      });
     }
     showToast("更新しました");
   } else {
@@ -715,21 +804,19 @@ function saveExpiryItem() {
       location,
       checked: false
     };
-    expiryItems.push(newItem);
+    await window.addDoc(window.colExpiry, newItem);
     showToast("追加しました");
   }
 
-  saveData();
   resetExpiryForm();
-  renderExpiryList();
   checkExpiryEmailAlert();
 }
 
-function editExpiryItem(id) {
-  const item = expiryItems.find(i => i.id === id);
+function editExpiryItem(firestoreId) {
+  const item = expiryItems.find(i => i.firestoreId === firestoreId);
   if (!item) return;
 
-  editingExpiryId = id;
+  editingExpiryId = firestoreId;
   document.getElementById("expName").value = item.name;
   document.getElementById("expAcquireDate").value = item.acquireDate;
   document.getElementById("expExpiryDate").value = item.expiryDate;
@@ -747,34 +834,30 @@ function resetExpiryForm() {
   document.getElementById("expName").value = "";
   document.getElementById("expAcquireDate").value = getTodayString();
   document.getElementById("expExpiryDate").value = "";
-  document.getElementById("expLocation").value = "冷蔵";
+  document.getElementById("expLocation").value = "パントリー";
 
   document.getElementById("expiryFormTitle").textContent = "＋ 食品を登録";
   document.getElementById("expSaveBtn").textContent = "登録する";
   document.getElementById("expCancelBtn").style.display = "none";
 }
 
-function toggleExpiryCheck(id, e) {
+async function toggleExpiryCheck(firestoreId, e) {
   e.stopPropagation();
-  const item = expiryItems.find(i => i.id === id);
+  const item = expiryItems.find(i => i.firestoreId === firestoreId);
   if (item) {
-    item.checked = !item.checked;
-    saveData();
-    renderExpiryList();
+    const docRef = window.doc(window.db, "expiryItems", firestoreId);
+    await window.updateDoc(docRef, { checked: !item.checked });
   }
 }
 
-// 賞味期限順に並べ替え ＆ 表記ゆれ対応リアルタイムフィルタ ＆ レンダリング
 function renderExpiryList() {
   const container = document.getElementById("expiryList");
   const countEl = document.getElementById("expiryCount");
   const rawFilterKeyword = document.getElementById("expFilterInput").value.trim();
   const filterKeyword = normalizeKana(rawFilterKeyword);
 
-  // 近い順にソート
   expiryItems.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-  // リアルタイムフィルタ適用（表記ゆれ対応：ひらがな・カタカナ同一視）
   const filteredItems = expiryItems.filter(item => {
     if (!filterKeyword) return true;
     const normName = normalizeKana(item.name);
@@ -822,8 +905,8 @@ function renderExpiryList() {
     card.className = "item-card";
     
     card.innerHTML = `
-      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleExpiryCheck('${item.id}', event)">
-      <div class="item-body" onclick="editExpiryItem('${item.id}')">
+      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleExpiryCheck('${item.firestoreId}', event)">
+      <div class="item-body" onclick="editExpiryItem('${item.firestoreId}')">
         <div class="item-title">${escapeHtml(item.name)}</div>
         <div class="item-meta">
           <span class="badge ${badgeClass}">${badgeText}</span>
@@ -838,7 +921,6 @@ function renderExpiryList() {
   });
 }
 
-// メール通知機能（3日前のチェック＆mailto trigger）
 function checkExpiryEmailAlert() {
   if (!userSettings.email) return;
 
@@ -846,14 +928,13 @@ function checkExpiryEmailAlert() {
   const alertItems = expiryItems.filter(item => {
     const expDate = new Date(item.expiryDate);
     const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-    return diffDays <= 3; // 3日以内または期限切れ
+    return diffDays <= 3;
   });
 
   if (alertItems.length > 0) {
     const lastNotified = localStorage.getItem("last_notified_date");
     const todayStr = getTodayString();
 
-    // 1日1回だけ確認ダイアログ
     if (lastNotified !== todayStr) {
       const names = alertItems.map(i => `・${i.name} (${i.expiryDate})`).join('\n');
       if (confirm(`【賞味期限通知】\n以下の食品の賞味期限が接近・超過しています。\n通知メールを作成しますか？\n\n${names}`)) {
@@ -876,7 +957,7 @@ function sendNotificationEmail(items) {
    【TAB 2】買い物リスト ロジック
 ========================================================= */
 
-function addShoppingItem() {
+async function addShoppingItem() {
   const input = document.getElementById("shopInput");
   const text = input.value.trim();
 
@@ -885,58 +966,51 @@ function addShoppingItem() {
     return;
   }
 
-  // 「と」や「、」でまとめて登録
   const items = text.split(/[\s、,と]+/);
 
-  items.forEach(name => {
+  for (let name of items) {
     if (name.trim()) {
-      shoppingItems.push({
+      await window.addDoc(window.colShopping, {
         id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
         name: name.trim(),
         purchased: false,
         checked: false
       });
     }
-  });
+  }
 
-  saveData();
   input.value = "";
-  renderShoppingList();
   showToast("買い物リストに追加しました");
 }
 
-function togglePurchased(id) {
-  const item = shoppingItems.find(i => i.id === id);
+async function togglePurchased(firestoreId) {
+  const item = shoppingItems.find(i => i.firestoreId === firestoreId);
   if (item) {
-    item.purchased = !item.purchased;
-    saveData();
-    renderShoppingList();
+    const docRef = window.doc(window.db, "shoppingItems", firestoreId);
+    await window.updateDoc(docRef, { purchased: !item.purchased });
   }
 }
 
-function toggleShoppingCheck(id, e) {
+async function toggleShoppingCheck(firestoreId, e) {
   e.stopPropagation();
-  const item = shoppingItems.find(i => i.id === id);
+  const item = shoppingItems.find(i => i.firestoreId === firestoreId);
   if (item) {
-    item.checked = !item.checked;
-    saveData();
-    renderShoppingList();
+    const docRef = window.doc(window.db, "shoppingItems", firestoreId);
+    await window.updateDoc(docRef, { checked: !item.checked });
   }
 }
 
-function editShoppingName(id) {
-  const item = shoppingItems.find(i => i.id === id);
+async function editShoppingName(firestoreId) {
+  const item = shoppingItems.find(i => i.firestoreId === firestoreId);
   if (!item) return;
 
   const newName = prompt("買い物項目名を変更", item.name);
   if (newName !== null && newName.trim() !== "") {
-    item.name = newName.trim();
-    saveData();
-    renderShoppingList();
+    const docRef = window.doc(window.db, "shoppingItems", firestoreId);
+    await window.updateDoc(docRef, { name: newName.trim() });
   }
 }
 
-// 買い物リストの描画 ＆ ドラッグ＆ドロップ実装
 function renderShoppingList() {
   const container = document.getElementById("shoppingList");
   const countEl = document.getElementById("shoppingCount");
@@ -957,21 +1031,18 @@ function renderShoppingList() {
 
     card.innerHTML = `
       <div class="drag-handle">☰</div>
-      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleShoppingCheck('${item.id}', event)">
-      <div class="item-body" onclick="togglePurchased('${item.id}')">
+      <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''} onclick="toggleShoppingCheck('${item.firestoreId}', event)">
+      <div class="item-body" onclick="togglePurchased('${item.firestoreId}')">
         <div class="item-title">${escapeHtml(item.name)}</div>
       </div>
-      <button style="background:transparent;box-shadow:none;color:#94a3b8;font-size:14px;padding:4px 8px;" onclick="editShoppingName('${item.id}')">✏️</button>
+      <button style="background:transparent;box-shadow:none;color:#94a3b8;font-size:14px;padding:4px 8px;" onclick="editShoppingName('${item.firestoreId}')">✏️</button>
     `;
 
-    // ドラッグ＆ドロップイベント設定
     addDragEvents(card);
-
     container.appendChild(card);
   });
 }
 
-/* ドラッグ＆ドロップ (Touch & Mouse 対応) */
 let dragSrcIndex = null;
 
 function addDragEvents(elem) {
@@ -1002,7 +1073,6 @@ function addDragEvents(elem) {
     if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
       const movedItem = shoppingItems.splice(dragSrcIndex, 1)[0];
       shoppingItems.splice(targetIndex, 0, movedItem);
-      saveData();
       renderShoppingList();
     }
   });
@@ -1011,7 +1081,6 @@ function addDragEvents(elem) {
     elem.classList.remove('dragging');
   });
 
-  // タッチ長押しからの並べ替え（スマホ対応）
   let touchTimer = null;
   elem.addEventListener('touchstart', (e) => {
     if (e.target.classList.contains('drag-handle')) {
@@ -1032,7 +1101,6 @@ function setupSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
-  // 買い物リスト用音声認識（無音許容を長くするため continuous = true に設定）
   recognition = new SpeechRecognition();
   recognition.lang = 'ja-JP';
   recognition.continuous = true;
@@ -1045,21 +1113,19 @@ function setupSpeechRecognition() {
     btn.textContent = "🔴 音声受付中...";
   };
 
-  recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
     let transcript = "";
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       transcript += event.results[i][0].transcript;
     }
-    document.getElementById("shopInput").value = transcript;
+    // document.getElementById("shopInput").value = transcript; ← この行を削除またはコメントアウト
 
-    // 切れ目（と、読点、スペース等）ごとに直接買い物リストに登録する
     const items = transcript.split(/[\s、,と]+/);
     let addedCount = 0;
-    items.forEach(name => {
+    for (let name of items) {
       const trimmed = name.trim();
       if (trimmed) {
-        // 重複防止として既に直近追加されていないか確認するか、そのまま追加する
-        shoppingItems.push({
+        await window.addDoc(window.colShopping, {
           id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
           name: trimmed,
           purchased: false,
@@ -1067,11 +1133,9 @@ function setupSpeechRecognition() {
         });
         addedCount++;
       }
-    });
+    }
 
     if (addedCount > 0) {
-      saveData();
-      renderShoppingList();
       showToast(`「${transcript}」から項目を直接追加しました`);
     }
   };
@@ -1087,7 +1151,6 @@ function setupSpeechRecognition() {
     btn.textContent = "🎤 音声入力";
   };
 
-  // 賞味期限管理用音声認識
   expiryRecognition = new SpeechRecognition();
   expiryRecognition.lang = 'ja-JP';
   expiryRecognition.continuous = false;
@@ -1117,7 +1180,6 @@ function setupSpeechRecognition() {
   };
 }
 
-// 「商品名 年月日」の音声結果を自動分解・入力する処理（年省略時は未来の直近を自動補完）
 function parseAndSetExpiryVoiceInput(text) {
   showToast(`「${text}」を解析中...`);
 
@@ -1139,7 +1201,6 @@ function parseAndSetExpiryVoiceInput(text) {
       if (y.length === 2) y = "20" + y;
       targetYear = parseInt(y);
     } else {
-      // 年が省略されている場合：年末年始の年跨ぎ（未来の直近）を考慮
       let testDate = new Date(targetYear, parseInt(month) - 1, parseInt(day));
       if (testDate < now) {
         targetYear += 1;
@@ -1185,7 +1246,6 @@ function toggleExpiryVoiceInput() {
   }
 }
 
-/* エスケープ関数 */
 function escapeHtml(str) {
   return str.replace(/[&<>"']/g, function(m) {
     return {
