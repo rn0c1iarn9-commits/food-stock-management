@@ -1012,7 +1012,7 @@ async function addShoppingItem() {
   }
 
   input.value = "";
-  showToast("買い物リストに追加しました");
+  showToast("追加しました");
 }
 
 async function togglePurchased(firestoreId) {
@@ -1168,7 +1168,7 @@ function setupSpeechRecognition() {
     }
 
     if (addedCount > 0) {
-      showToast(`「${transcript}」から項目を直接追加しました`);
+      showToast(`「${transcript}」を追加しました`);
     }
   };
 
