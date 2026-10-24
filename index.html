@@ -1001,12 +1001,14 @@ async function addShoppingItem() {
   const items = text.split(/[\s、,と]+/);
 
   for (let name of items) {
-    if (name.trim()) {
+    const trimmed = name.trim();
+    if (trimmed) {
       await window.addDoc(window.colShopping, {
         id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
-        name: name.trim(),
+        name: trimmed,
         purchased: false,
-        checked: false
+        checked: false,
+        createdAt: Date.now() // ← 【追加】新着順にするためのタイムスタンプ
       });
     }
   }
@@ -1054,6 +1056,16 @@ function renderShoppingList() {
     container.innerHTML = '<div class="empty-state">買い物リストは空です</div>';
     return;
   }
+
+  // 並び順のルール
+  // 1. 未購入(purchased: false)を上、購入済み(purchased: true)を下にする
+  // 2. 同じ状態の中では、新しく登録したものが上に来るようにする（createdAtの降順）
+  shoppingItems.sort((a, b) => {
+    if (a.purchased !== b.purchased) {
+      return a.purchased ? 1 : -1; // false が前、true が後ろ
+    }
+    return (b.createdAt || 0) - (a.createdAt || 0); // 新しい順
+  });
 
   shoppingItems.forEach((item, index) => {
     const card = document.createElement("div");
@@ -1161,7 +1173,8 @@ function setupSpeechRecognition() {
           id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
           name: trimmed,
           purchased: false,
-          checked: false
+          checked: false,
+          createdAt: Date.now()
         });
         addedCount++;
       }
