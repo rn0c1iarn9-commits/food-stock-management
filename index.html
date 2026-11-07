@@ -1067,12 +1067,14 @@ async function addShoppingItem() {
   for (let name of items) {
     const trimmed = name.trim();
     if (trimmed) {
+      const minOrder = shoppingItems.reduce((min, i) => Math.min(min, i.sortOrder ?? 0), 0);
       await window.addDoc(window.colShopping, {
         id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
         name: trimmed,
         purchased: false,
         checked: false,
-        createdAt: Date.now() // ← 【追加】新着順にするためのタイムスタンプ
+        createdAt: Date.now(),
+        sortOrder: minOrder - 1 // 一番上に配置するため最小値より小さくする
       });
     }
   }
@@ -1123,18 +1125,21 @@ function renderShoppingList() {
 
   // 並び順のルール
   // 1. 未購入(purchased: false)を上、購入済み(purchased: true)を下にする
-  // 2. 同じ状態の中では、新しく登録したものが上に来るようにする（createdAtの降順）
-  shoppingItems.sort((a, b) => {
+  // 2. 同じ状態の中では、長押し移動順 (sortOrder) を最優先する
+    shoppingItems.sort((a, b) => {
     if (a.purchased !== b.purchased) {
-      return a.purchased ? 1 : -1; // false が前、true が後ろ
+      return a.purchased ? 1 : -1;
     }
-    return (b.createdAt || 0) - (a.createdAt || 0); // 新しい順
+    const orderA = a.sortOrder ?? a.createdAt ?? 0;
+    const orderB = b.sortOrder ?? b.createdAt ?? 0;
+    return orderA - orderB; // 昇順（上で並び替えた順番を維持）
   });
 
   shoppingItems.forEach((item, index) => {
     const card = document.createElement("div");
     card.className = `item-card shopping-item ${item.purchased ? 'purchased' : ''}`;
     card.dataset.index = index;
+    card.dataset.firestoreId = item.firestoreId; // ★追加：一意のIDを持たせる
 
     card.innerHTML = `
       <div class="drag-handle">☰</div>
@@ -1155,53 +1160,68 @@ function addDragEvents(card) {
   const container = document.getElementById("shoppingList");
   
   let isDragging = false;
-  let currentIndex = Number(card.dataset.index);
 
   handle.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     isDragging = true;
-    card.setPointerCapture(e.pointerId);
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (err) {}
     card.classList.add('dragging');
-    currentIndex = Number(card.dataset.index);
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   });
 
-  card.addEventListener('pointermove', (e) => {
+  function onPointerMove(e) {
     if (!isDragging) return;
 
     const mouseY = e.clientY;
     const siblings = Array.from(container.children);
 
     for (let sib of siblings) {
+      if (sib === card) continue;
       const rect = sib.getBoundingClientRect();
-      const sibIndex = Number(sib.dataset.index);
 
-      // マウスや指が別のカードの中央付近を通ったら配列内で入れ替える
-      if (mouseY >= rect.top && mouseY <= rect.bottom && sibIndex !== currentIndex) {
-        const movedItem = shoppingItems.splice(currentIndex, 1)[0];
-        shoppingItems.splice(sibIndex, 0, movedItem);
-        currentIndex = sibIndex;
-        renderShoppingList();
+      if (mouseY >= rect.top && mouseY <= rect.bottom) {
+        const boxMidY = rect.top + rect.height / 2;
+        if (mouseY < boxMidY) {
+          container.insertBefore(card, sib);
+        } else {
+          container.insertBefore(card, sib.nextSibling);
+        }
         break;
       }
     }
-  });
+  }
 
-  card.addEventListener('pointerup', async (e) => {
+  async function onPointerUp(e) {
     if (!isDragging) return;
     isDragging = false;
-    card.releasePointerCapture(e.pointerId);
     card.classList.remove('dragging');
 
-    // 並び替え結果の順序（sortOrder）を更新してFirestoreに保存
-    for (let i = 0; i < shoppingItems.length; i++) {
-      const item = shoppingItems[i];
-      item.sortOrder = i;
-      const docRef = window.doc(window.db, "shoppingItems", item.firestoreId);
-      await window.updateDoc(docRef, { sortOrder: i });
-    }
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
 
-    renderShoppingList();
-  });
+    try {
+      handle.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+
+    // 画面上のDOMの並び順（firestoreId）を取得して Firestore の sortOrder を一括更新
+    const currentCards = Array.from(container.children);
+    
+    for (let i = 0; i < currentCards.length; i++) {
+      const cardEl = currentCards[i];
+      const firestoreId = cardEl.dataset.firestoreId;
+      const item = shoppingItems.find(item => item.firestoreId === firestoreId);
+
+      if (item) {
+        item.sortOrder = i;
+        const docRef = window.doc(window.db, "shoppingItems", firestoreId);
+        await window.updateDoc(docRef, { sortOrder: i });
+      }
+    }
+  }
 }
 
 /* ================= 音声入力機能 ================= */
@@ -1233,12 +1253,14 @@ function setupSpeechRecognition() {
     for (let name of items) {
       const trimmed = name.trim();
       if (trimmed) {
+        const minOrder = shoppingItems.reduce((min, i) => Math.min(min, i.sortOrder ?? 0), 0);
         await window.addDoc(window.colShopping, {
           id: "shop_" + Date.now() + "_" + Math.random().toString(16).slice(2),
           name: trimmed,
           purchased: false,
           checked: false,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          sortOrder: minOrder - 1 // 一番上に配置するため最小値より小さくする
         });
         addedCount++;
       }
