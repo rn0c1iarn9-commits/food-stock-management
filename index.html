@@ -414,6 +414,27 @@ input[type="text"], select, textarea{
   transform:translateX(-50%) translateY(0);
   opacity:1;
 }
+
+/* 買い物リスト専用スタイル */
+.shopping-item{
+  user-select:none;
+  touch-action: pan-y; /* 縦スクロールを許可しつつ制御 */
+}
+.drag-handle {
+  touch-action: none; /* ☰ハンドル部分はスクロールさせずにドラッグ操作を優先 */
+  color: #cbd5e1;
+  padding: 4px 6px;
+  margin-right: 6px;
+  font-size: 16px;
+  cursor: grab;
+}
+.shopping-item.dragging{
+  opacity: 0.6;
+  background: #eff6ff;
+  border: 2px dashed #3b82f6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 10;
+}
 </style>
 </head>
 
@@ -1113,7 +1134,6 @@ function renderShoppingList() {
   shoppingItems.forEach((item, index) => {
     const card = document.createElement("div");
     card.className = `item-card shopping-item ${item.purchased ? 'purchased' : ''}`;
-    card.draggable = true;
     card.dataset.index = index;
 
     card.innerHTML = `
@@ -1130,56 +1150,57 @@ function renderShoppingList() {
   });
 }
 
-let dragSrcIndex = null;
+function addDragEvents(card) {
+  const handle = card.querySelector('.drag-handle');
+  const container = document.getElementById("shoppingList");
+  
+  let isDragging = false;
+  let currentIndex = Number(card.dataset.index);
 
-function addDragEvents(elem) {
-  elem.addEventListener('dragstart', (e) => {
-    dragSrcIndex = Number(elem.dataset.index);
-    elem.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-
-  elem.addEventListener('dragover', (e) => {
+  handle.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    isDragging = true;
+    card.setPointerCapture(e.pointerId);
+    card.classList.add('dragging');
+    currentIndex = Number(card.dataset.index);
   });
 
-  elem.addEventListener('dragenter', (e) => {
-    elem.style.border = "2px dashed #3b82f6";
-  });
+  card.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
 
-  elem.addEventListener('dragleave', (e) => {
-    elem.style.border = "1px solid #f1f5f9";
-  });
+    const mouseY = e.clientY;
+    const siblings = Array.from(container.children);
 
-  elem.addEventListener('drop', (e) => {
-    e.stopPropagation();
-    elem.style.border = "1px solid #f1f5f9";
-    const targetIndex = Number(elem.dataset.index);
+    for (let sib of siblings) {
+      const rect = sib.getBoundingClientRect();
+      const sibIndex = Number(sib.dataset.index);
 
-    if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
-      const movedItem = shoppingItems.splice(dragSrcIndex, 1)[0];
-      shoppingItems.splice(targetIndex, 0, movedItem);
-      renderShoppingList();
+      // マウスや指が別のカードの中央付近を通ったら配列内で入れ替える
+      if (mouseY >= rect.top && mouseY <= rect.bottom && sibIndex !== currentIndex) {
+        const movedItem = shoppingItems.splice(currentIndex, 1)[0];
+        shoppingItems.splice(sibIndex, 0, movedItem);
+        currentIndex = sibIndex;
+        renderShoppingList();
+        break;
+      }
     }
   });
 
-  elem.addEventListener('dragend', () => {
-    elem.classList.remove('dragging');
-  });
+  card.addEventListener('pointerup', async (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    card.releasePointerCapture(e.pointerId);
+    card.classList.remove('dragging');
 
-  let touchTimer = null;
-  elem.addEventListener('touchstart', (e) => {
-    if (e.target.classList.contains('drag-handle')) {
-      touchTimer = setTimeout(() => {
-        elem.classList.add('dragging');
-      }, 300);
+    // 並び替え結果の順序（sortOrder）を更新してFirestoreに保存
+    for (let i = 0; i < shoppingItems.length; i++) {
+      const item = shoppingItems[i];
+      item.sortOrder = i;
+      const docRef = window.doc(window.db, "shoppingItems", item.firestoreId);
+      await window.updateDoc(docRef, { sortOrder: i });
     }
-  }, { passive: true });
 
-  elem.addEventListener('touchend', () => {
-    clearTimeout(touchTimer);
-    elem.classList.remove('dragging');
+    renderShoppingList();
   });
 }
 
